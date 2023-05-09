@@ -190,21 +190,17 @@ pub async fn get_client_module_options_context(
     };
     let jsx_runtime_options =
         get_jsx_transform_options(project_path, Some(resolve_options_context));
-    let enable_webpack_loaders = {
-        let options = &*next_config.webpack_loaders_options().await?;
-        let loaders_options = WebpackLoadersOptions {
-            extension_to_loaders: options.clone(),
+    let webpack_rules =
+        *maybe_add_babel_loader(project_path, *next_config.webpack_rules().await?).await?;
+    let enable_webpack_loaders = webpack_rules.map(|rules| {
+        WebpackLoadersOptions {
+            rules,
             loader_runner_package: Some(get_external_next_compiled_package_mapping(
                 StringVc::cell("loader-runner".to_owned()),
             )),
-            placeholder_for_future_extensions: (),
         }
-        .cell();
-
-        maybe_add_babel_loader(project_path, loaders_options)
-            .await?
-            .clone_if()
-    };
+        .cell()
+    });
 
     let source_transforms = vec![
         *get_relay_transform_plugin(next_config).await?,
