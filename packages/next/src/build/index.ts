@@ -283,22 +283,27 @@ export default async function build(
 
       const publicDir = path.join(dir, 'public')
       const isAppDirEnabled = !!config.experimental.appDir
-
-      if (isAppDirEnabled) {
-        if (!process.env.__NEXT_TEST_MODE && ciEnvironment.hasNextSupport) {
-          const requireHook = require.resolve('../server/require-hook')
-          const contents = await promises.readFile(requireHook, 'utf8')
-          await promises.writeFile(
-            requireHook,
-            `process.env.__NEXT_PRIVATE_PREBUNDLED_REACT = '1'\n${contents}`
-          )
-        }
-      }
-
       const { pagesDir, appDir } = findPagesDir(dir, isAppDirEnabled)
       NextBuildContext.pagesDir = pagesDir
       NextBuildContext.appDir = appDir
       hasAppDir = Boolean(appDir)
+
+      if (isAppDirEnabled && hasAppDir) {
+        if (
+          (!process.env.__NEXT_TEST_MODE ||
+            process.env.__NEXT_TEST_MODE === 'e2e') &&
+          ciEnvironment.hasNextSupport
+        ) {
+          const requireHook = require.resolve('../server/require-hook')
+          const contents = await promises.readFile(requireHook, 'utf8')
+          await promises.writeFile(
+            requireHook,
+            `process.env.__NEXT_PRIVATE_PREBUNDLED_REACT = '${
+              config.experimental.serverActions ? 'experimental' : 'next'
+            }'\n${contents}`
+          )
+        }
+      }
 
       const isSrcDir = path
         .relative(dir, pagesDir || appDir || '')
@@ -333,7 +338,6 @@ export default async function build(
         dir,
         appDir,
         pagesDir,
-        isAppDirEnabled,
         runLint,
         shouldLint,
         ignoreESLint,
@@ -825,6 +829,8 @@ export default async function build(
 
       const manifestPath = path.join(distDir, SERVER_DIRECTORY, PAGES_MANIFEST)
 
+      const { incrementalCacheHandlerPath } = config.experimental
+
       const requiredServerFiles = nextBuildSpan
         .traceChild('generate-required-server-files')
         .traceFn(() => ({
@@ -840,12 +846,8 @@ export default async function build(
             experimental: {
               ...config.experimental,
               trustHostHeader: ciEnvironment.hasNextSupport,
-              incrementalCacheHandlerPath: config.experimental
-                .incrementalCacheHandlerPath
-                ? path.relative(
-                    distDir,
-                    config.experimental.incrementalCacheHandlerPath
-                  )
+              incrementalCacheHandlerPath: incrementalCacheHandlerPath
+                ? path.relative(distDir, incrementalCacheHandlerPath)
                 : undefined,
             },
           },
@@ -1917,9 +1919,13 @@ export default async function build(
 
             // ensure we trace any dependencies needed for custom
             // incremental cache handler
-            if (config.experimental.incrementalCacheHandlerPath) {
+            if (incrementalCacheHandlerPath) {
               toTrace.push(
-                require.resolve(config.experimental.incrementalCacheHandlerPath)
+                require.resolve(
+                  path.isAbsolute(incrementalCacheHandlerPath)
+                    ? incrementalCacheHandlerPath
+                    : path.join(dir, incrementalCacheHandlerPath)
+                )
               )
             }
 
@@ -3054,6 +3060,10 @@ export default async function build(
       if (config.output === 'export') {
         const exportApp: typeof import('../export').default =
           require('../export').default
+
+        const pagesWorker = createStaticWorker('pages')
+        const appWorker = createStaticWorker('app')
+
         const options: ExportOptions = {
           isInvokedFromCli: false,
           nextConfig: config,
@@ -3061,8 +3071,25 @@ export default async function build(
           silent: true,
           threads: config.experimental.cpus,
           outdir: path.join(dir, configOutDir),
+          exportAppPageWorker: sharedPool
+            ? appWorker.exportPage.bind(appWorker)
+            : undefined,
+          exportPageWorker: sharedPool
+            ? pagesWorker.exportPage.bind(pagesWorker)
+            : undefined,
+          endWorker: sharedPool
+            ? async () => {
+                await pagesWorker.end()
+                await appWorker.end()
+              }
+            : undefined,
         }
+
         await exportApp(dir, options, nextBuildSpan)
+
+        // ensure the worker is not left hanging
+        pagesWorker.close()
+        appWorker.close()
       }
 
       await nextBuildSpan

@@ -1,6 +1,8 @@
 import { createNextDescribe } from 'e2e-utils'
 import { check } from 'next-test-utils'
 import { Request } from 'playwright-chromium'
+import fs from 'fs-extra'
+import { join } from 'path'
 
 const GENERIC_RSC_ERROR =
   'Error: An error occurred in the Server Components render. The specific message is omitted in production builds to avoid leaking sensitive details. A digest property is included on this error instance which may provide additional details about the nature of the error.'
@@ -9,9 +11,8 @@ createNextDescribe(
   'app-dir action handling',
   {
     files: __dirname,
-    skipDeployment: true,
   },
-  ({ next, isNextDev }) => {
+  ({ next, isNextDev, isNextStart }) => {
     it('should handle basic actions correctly', async () => {
       const browser = await next.browser('/server')
 
@@ -58,6 +59,32 @@ createNextDescribe(
       }, 'same')
     })
 
+    it('should support headers in client imported actions', async () => {
+      const logs: string[] = []
+      next.on('stdout', (log) => {
+        logs.push(log)
+      })
+      next.on('stderr', (log) => {
+        logs.push(log)
+      })
+
+      const currentTimestamp = Date.now()
+
+      const browser = await next.browser('/client')
+      await browser.elementByCss('#get-header').click()
+      await check(() => {
+        return logs.some((log) =>
+          log.includes('accept header: text/x-component')
+        )
+          ? 'yes'
+          : ''
+      }, 'yes')
+
+      expect(
+        await browser.eval('+document.cookie.match(/test-cookie=(\\d+)/)[1]')
+      ).toBeGreaterThanOrEqual(currentTimestamp)
+    })
+
     it('should support setting cookies in route handlers with the correct overrides', async () => {
       const res = await next.fetch('/handler')
       const setCookieHeader = res.headers.get('set-cookie') as string[]
@@ -79,11 +106,32 @@ createNextDescribe(
       }, '/header?name=test&constructor=FormData')
     })
 
-    it('should support notFound', async () => {
+    it('should support .bind', async () => {
+      const browser = await next.browser('/server')
+
+      await browser.eval(`document.getElementById('n').value = '123'`)
+      await browser.elementByCss('#minus-one').click()
+
+      await check(() => {
+        return browser.eval('window.location.pathname + window.location.search')
+      }, '/header?result=122')
+    })
+
+    it('should support notFound (javascript disabled)', async () => {
       const browser = await next.browser('/server', {
         // TODO we should also test this with javascript on but not-found is not implemented yet.
         disableJavaScript: true,
       })
+
+      await browser.elementByCss('#nowhere').click()
+
+      await check(() => {
+        return browser.elementByCss('h1').text()
+      }, 'my-not-found')
+    })
+
+    it('should support notFound', async () => {
+      const browser = await next.browser('/server')
 
       await browser.elementByCss('#nowhere').click()
 
@@ -161,6 +209,24 @@ createNextDescribe(
       await check(() => browser.elementByCss('h1').text(), '3')
     })
 
+    if (isNextStart) {
+      it('should not expose action content in sourcemaps', async () => {
+        const sourcemap = (
+          await fs.readdir(
+            join(next.testDir, '.next', 'static', 'chunks', 'app', 'client')
+          )
+        ).find((f) => f.endsWith('.js.map'))
+
+        expect(sourcemap).toBeDefined()
+
+        expect(
+          await next.readFile(
+            join('.next', 'static', 'chunks', 'app', 'client', sourcemap)
+          )
+        ).not.toContain('this_is_sensitive_info')
+      })
+    }
+
     if (isNextDev) {
       describe('HMR', () => {
         it('should support updating the action', async () => {
@@ -228,6 +294,35 @@ createNextDescribe(
         await check(() => {
           return browser.elementByCss('h1').text()
         }, 'Prefix: HELLO, WORLD')
+      })
+
+      it('should handle redirect to a relative URL in a single pass', async () => {
+        const browser = await next.browser('/client/edge')
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, 3000)
+        })
+
+        let requests = []
+
+        browser.on('request', (req: Request) => {
+          requests.push(new URL(req.url()).pathname)
+        })
+
+        await browser.elementByCss('#redirect').click()
+
+        // no other requests should be made
+        expect(requests).toEqual(['/client/edge'])
+      })
+
+      it('should handle regular redirects', async () => {
+        const browser = await next.browser('/client/edge')
+
+        await browser.elementByCss('#redirect-external').click()
+
+        await check(async () => {
+          return browser.eval('window.location.toString()')
+        }, 'https://example.com/')
       })
     })
 
