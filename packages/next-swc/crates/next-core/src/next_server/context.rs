@@ -274,7 +274,7 @@ pub async fn get_server_module_options_context(
         *maybe_add_babel_loader(project_path, *next_config.webpack_rules().await?).await?;
     let enable_webpack_loaders = webpack_rules.map(|rules| {
         WebpackLoadersOptions {
-            rules: rules.clone(),
+            rules,
             loader_runner_package: Some(get_external_next_compiled_package_mapping(
                 StringVc::cell("loader-runner".to_owned()),
             )),
