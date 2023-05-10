@@ -13,7 +13,7 @@ use turbo_binding::{
                 },
                 parse::RequestVc,
                 pattern::Pattern,
-                resolve, AliasPattern, ExportsValue, ResolveAliasMapVc,
+                resolve, AliasPattern, ResolveAliasMapVc, SubpathValue,
             },
         },
         node::execution_context::ExecutionContextVc,
@@ -517,7 +517,7 @@ pub async fn insert_alias_option<const N: usize>(
 }
 
 fn export_value_to_import_mapping(
-    value: &ExportsValue,
+    value: &SubpathValue,
     conditions: &BTreeMap<String, ConditionValue>,
     project_path: FileSystemPathVc,
 ) -> Option<ImportMappingVc> {
