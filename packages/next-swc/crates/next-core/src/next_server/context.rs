@@ -44,7 +44,10 @@ use crate::{
     next_import_map::get_next_server_import_map,
     next_server::resolve::ExternalPredicate,
     next_shared::{
-        resolve::UnsupportedModulesResolvePluginVc, transforms::get_relay_transform_plugin,
+        resolve::UnsupportedModulesResolvePluginVc,
+        transforms::{
+            get_relay_transform_plugin, swc_ecma_transform_plugins::get_swc_ecma_transform_plugin,
+        },
     },
     transform_options::{
         get_decorators_transform_options, get_emotion_compiler_config, get_jsx_transform_options,
@@ -297,10 +300,16 @@ pub async fn get_server_module_options_context(
     let jsx_runtime_options = get_jsx_transform_options(project_path);
     let enable_emotion = *get_emotion_compiler_config(next_config).await?;
     let enable_styled_components = *get_styled_components_compiler_config(next_config).await?;
+    let swc_ecma_transform_plugins =
+        *get_swc_ecma_transform_plugin(project_path, next_config).await?;
 
     let mut source_transforms = vec![];
     if let Some(relay_transform_plugin) = *get_relay_transform_plugin(next_config).await? {
         source_transforms.push(relay_transform_plugin);
+    }
+
+    if let Some(swc_plugins) = swc_ecma_transform_plugins {
+        source_transforms.push(swc_plugins);
     }
     let output_transforms = vec![];
 
