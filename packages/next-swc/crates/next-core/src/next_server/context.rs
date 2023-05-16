@@ -47,6 +47,7 @@ use crate::{
     next_shared::{
         resolve::UnsupportedModulesResolvePluginVc, transforms::get_relay_transform_plugin,
     },
+    sass::maybe_add_sass_loader,
     transform_options::{
         get_decorators_transform_options, get_emotion_compiler_config, get_jsx_transform_options,
         get_styled_components_compiler_config, get_typescript_transform_options,
@@ -272,11 +273,12 @@ pub async fn get_server_module_options_context(
             loader_runner_package: Some(get_external_next_compiled_package_mapping(
                 StringVc::cell("loader-runner".to_owned()),
             )),
-            placeholder_for_future_extensions: (),
+            ..Default::default()
         }
         .cell();
 
-        maybe_add_babel_loader(project_path, loaders_options)
+        let loaders_options = maybe_add_babel_loader(project_path, loaders_options);
+        maybe_add_sass_loader(next_config.sass_config(), loaders_options)
             .await?
             .clone_if()
     };
