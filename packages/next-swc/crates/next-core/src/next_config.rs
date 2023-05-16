@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use turbo_tasks::{
-    primitives::{BoolVc, StringsVc},
+    primitives::{BoolVc, StringVc, StringsVc},
     trace::TraceRawVcs,
     CompletionVc, Value,
 };
@@ -38,22 +38,12 @@ use turbopack_binding::{
             execution_context::{ExecutionContext, ExecutionContextVc},
             transforms::webpack::{WebpackLoaderItem, WebpackLoaderItemsVc},
         },
-        turbopack::evaluate_context::node_evaluate_asset_context,
         turbopack::{
             evaluate_context::node_evaluate_asset_context,
-            module_options::{
-                LoaderRuleItem, OptionWebpackRulesVc, StyledComponentsTransformConfig,
-                WebpackRulesVc,
-            },
+            module_options::{LoaderRuleItem, OptionWebpackRulesVc, WebpackRulesVc},
         },
     },
 };
-use turbo_tasks::{
-    primitives::{BoolVc, StringVc, StringsVc},
-    trace::TraceRawVcs,
-    CompletionVc, Value,
-};
-use turbo_tasks_fs::json::parse_json_with_source_context;
 
 use crate::{embed_js::next_asset, next_shared::transforms::ModularizeImportPackageConfig};
 
