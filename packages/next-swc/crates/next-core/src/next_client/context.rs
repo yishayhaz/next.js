@@ -339,14 +339,14 @@ pub fn get_client_chunking_context(
 
 #[turbo_tasks::function]
 pub fn get_client_assets_path(
-    server_root: FileSystemPathVc,
+    client_root: FileSystemPathVc,
     ty: Value<ClientContextType>,
 ) -> FileSystemPathVc {
     match ty.into_value() {
         ClientContextType::Pages { .. }
         | ClientContextType::App { .. }
-        | ClientContextType::Fallback => server_root.join("/_next/static/assets"),
-        ClientContextType::Other => server_root.join("/_assets"),
+        | ClientContextType::Fallback => client_root.join("/static/assets"),
+        ClientContextType::Other => client_root.join("/_assets"),
     }
 }
 
